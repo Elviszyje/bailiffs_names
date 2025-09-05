@@ -40,13 +40,13 @@ class BailiffDict(Base):
     adres = Column(Text, nullable=True)
     kod_pocztowy = Column(String(20), nullable=True)
     telefon = Column(String(50), nullable=True)
-    email = Column(String(200), nullable=True)
-    bank = Column(String(200), nullable=True)
-    numer_konta = Column(String(100), nullable=True)
+    email = Column(String(100), nullable=True)
     normalized_lastname = Column(String(100), nullable=True)
     normalized_firstname = Column(String(100), nullable=True)
-    normalized_fullname = Column(Text, nullable=True)
     normalized_city = Column(String(100), nullable=True)
+    bank = Column(String(200), nullable=True)
+    numer_konta = Column(String(100), nullable=True)
+    normalized_fullname = Column(Text, nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
 class RawNames(Base):
@@ -283,25 +283,57 @@ def show_file_upload():
         try:
             # Import file processing functions
             import sys
-            sys.path.append('scripts')
-            from scripts.file_upload import create_analysis_session, process_uploaded_file
+            import os
+            current_dir = os.getcwd()
+            scripts_path = os.path.join(current_dir, 'archive', 'scripts')
+            print(f"🔍 DEBUG: Obecny katalog: {current_dir}")
+            print(f"🔍 DEBUG: Ścieżka do skryptów: {scripts_path}")
+            print(f"🔍 DEBUG: Czy ścieżka istnieje: {os.path.exists(scripts_path)}")
+            print(f"🔍 DEBUG: Zawartość katalogu scripts: {os.listdir(scripts_path) if os.path.exists(scripts_path) else 'Katalog nie istnieje'}")
+            
+            if scripts_path not in sys.path:
+                sys.path.append(scripts_path)
+                print(f"✅ DEBUG: Dodano ścieżkę do sys.path: {scripts_path}")
+            else:
+                print(f"✅ DEBUG: Ścieżka już była w sys.path: {scripts_path}")
+            
+            print("🔍 DEBUG: Próba importu file_upload...")
+            from file_upload import create_analysis_session, process_uploaded_file, delete_session, delete_all_sessions
+            print("✅ DEBUG: Import file_upload zakończony pomyślnie")
             
             with st.spinner("Tworzenie sesji..."):
+                print(f"🔍 DEBUG: Tworzenie sesji - nazwa: {session_name}, plik: {uploaded_file.name}")
                 session_id, message = create_analysis_session(
                     session_name=session_name,
                     filename=uploaded_file.name,
                     description=description
                 )
+                print(f"🔍 DEBUG: Wynik tworzenia sesji - ID: {session_id}, wiadomość: {message}")
             
             if session_id is not None:
                 st.success(f"✅ Sesja utworzona: {message}")
                 
                 with st.spinner("Przetwarzanie pliku..."):
+                    print(f"🔍 DEBUG APP: PRZED wywołaniem process_uploaded_file - ścieżka: {temp_path}, session_id: {session_id}, arkusz: {sheet_name}")
+                    print(f"🔍 DEBUG APP: Plik istnieje: {os.path.exists(temp_path)}")
+                    print(f"🔍 DEBUG APP: Rozmiar pliku: {os.path.getsize(temp_path) if os.path.exists(temp_path) else 'NIE ISTNIEJE'}")
+                    
                     success, result_message = process_uploaded_file(
                         file_path=temp_path,
                         session_id=session_id,
                         sheet_name=sheet_name
                     )
+                    print(f"🔍 DEBUG APP: PO wywołaniu process_uploaded_file - sukces: {success}, wiadomość: {result_message}")
+                    
+                    # Sprawdź końcowy stan
+                    try:
+                        engine, SessionLocal = get_database_connection()
+                        db_session = SessionLocal()
+                        final_count = db_session.query(RawNames).filter(RawNames.session_id == session_id).count()
+                        print(f"🔍 DEBUG APP: KOŃCOWA liczba rekordów w sesji {session_id}: {final_count}")
+                        db_session.close()
+                    except Exception as e:
+                        print(f"❌ DEBUG APP: Błąd sprawdzania końcowego stanu: {e}")
                 
                 if success:
                     st.success(f"✅ {result_message}")
@@ -309,14 +341,28 @@ def show_file_upload():
                     # Run matching algorithm
                     with st.spinner("Uruchamianie algorytmu dopasowywania..."):
                         try:
-                            from scripts.session_matching import run_matching_for_session
+                            print("🔍 DEBUG: Rozpoczynanie algorytmu dopasowywania...")
+                            print(f"🔍 DEBUG: Session ID: {session_id}")
+                            print(f"🔍 DEBUG: Ścieżka skryptów: {scripts_path}")
+                            print(f"🔍 DEBUG: sys.path zawiera: {sys.path}")
+                            
+                            print("🔍 DEBUG: Próba importu session_matching...")
+                            from session_matching import run_matching_for_session
+                            print("✅ DEBUG: Import session_matching zakończony pomyślnie")
+                            
+                            print(f"🔍 DEBUG: Uruchamianie run_matching_for_session({session_id})...")
                             match_success, match_message = run_matching_for_session(session_id)
+                            print(f"🔍 DEBUG: Wynik dopasowywania: success={match_success}, message={match_message}")
                             
                             if match_success:
                                 st.success(f"✅ Dopasowywanie zakończone: {match_message}")
                             else:
                                 st.warning(f"⚠️ Problem z dopasowywaniem: {match_message}")
                         except Exception as e:
+                            print(f"❌ DEBUG: Błąd podczas dopasowywania: {e}")
+                            print(f"❌ DEBUG: Typ błędu: {type(e).__name__}")
+                            import traceback
+                            print(f"❌ DEBUG: Traceback: {traceback.format_exc()}")
                             st.warning(f"⚠️ Błąd podczas dopasowywania: {e}")
                 else:
                     st.error(f"❌ {result_message}")
@@ -328,6 +374,7 @@ def show_file_upload():
         finally:
             # Clean up temp file
             try:
+                import os
                 os.unlink(temp_path)
             except:
                 pass
@@ -403,7 +450,7 @@ def main():
     st.markdown('<h1 class="custom-title">⚖️ System dopasowywania komorników</h1>', unsafe_allow_html=True)
     
     # Main navigation tabs - always visible
-    tab_main, tab_bailiffs, tab_upload = st.tabs(["🔍 Analiza dopasowań", "�‍💼 Baza komorników", "�📁 Wgraj nowy plik"])
+    tab_main, tab_bailiffs, tab_upload, tab_sessions = st.tabs(["🔍 Analiza dopasowań", "👨‍💼 Baza komorników", "📁 Wgraj nowy plik", "🗂️ Zarządzanie sesjami"])
     
     with tab_upload:
         st.header("📁 Wgrywanie nowych plików")
@@ -412,6 +459,9 @@ def main():
     with tab_bailiffs:
         show_bailiffs_management()
     
+    with tab_sessions:
+        show_sessions_management()
+
     with tab_main:
         # Session selector
         col1, col2 = st.columns([3, 1])
@@ -967,11 +1017,14 @@ def show_bailiffs_management():
             with col1:
                 st.metric("Łączna liczba komorników", total_bailiffs)
             with col2:
-                st.metric("Z adresem email", bailiffs_with_email, f"{bailiffs_with_email/total_bailiffs*100:.1f}%")
+                email_percent = f"{bailiffs_with_email/total_bailiffs*100:.1f}%" if total_bailiffs > 0 else "0%"
+                st.metric("Z adresem email", bailiffs_with_email, email_percent)
             with col3:
-                st.metric("Z numerem telefonu", bailiffs_with_phone, f"{bailiffs_with_phone/total_bailiffs*100:.1f}%")
+                phone_percent = f"{bailiffs_with_phone/total_bailiffs*100:.1f}%" if total_bailiffs > 0 else "0%"
+                st.metric("Z numerem telefonu", bailiffs_with_phone, phone_percent)
             with col4:
-                st.metric("Z danymi bankowymi", bailiffs_with_bank, f"{bailiffs_with_bank/total_bailiffs*100:.1f}%")
+                bank_percent = f"{bailiffs_with_bank/total_bailiffs*100:.1f}%" if total_bailiffs > 0 else "0%"
+                st.metric("Z danymi bankowymi", bailiffs_with_bank, bank_percent)
             
             st.markdown("---")
             
@@ -998,6 +1051,128 @@ def show_bailiffs_management():
     
     finally:
         session.close()
+
+def show_sessions_management():
+    """Display sessions management interface"""
+    # Import functions for session deletion
+    from file_upload import delete_session, delete_all_sessions
     
+    st.header("🗂️ Zarządzanie sesjami analizy")
+    
+    # Get list of sessions
+    sessions = get_sessions_list()
+    
+    if not sessions:
+        st.info("🔍 Brak sesji do zarządzania")
+        return
+    
+    # Main tabs for session management 
+    session_tab1, session_tab2 = st.tabs(["📋 Lista sesji", "🗑️ Usuwanie sesji"])
+    
+    with session_tab1:
+        st.subheader("Lista wszystkich sesji")
+        
+        # Display sessions in a nice table format
+        for i, session in enumerate(sessions):
+            with st.expander(f"📁 {session['session_name']} ({session['status']})", expanded=False):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.write(f"**Nazwa pliku:** {session['filename']}")
+                    st.write(f"**Status:** {session['status']}")
+                    st.write(f"**Utworzono:** {session['created_at'].strftime('%Y-%m-%d %H:%M')}")
+                
+                with col2:
+                    st.write(f"**Rekordów ogółem:** {session['total_records']}")
+                    st.write(f"**Przetworzono:** {session['processed_records']}")
+                    st.write(f"**Dopasowano:** {session['matched_records']}")
+                
+                if session['description']:
+                    st.write(f"**Opis:** {session['description']}")
+    
+    with session_tab2:
+        st.subheader("Usuwanie sesji")
+        
+        # Warning message
+        st.warning("⚠️ **UWAGA:** Usunięcie sesji jest nieodwracalne! Wszystkie dane związane z sesją zostaną permanently usunięte.")
+        
+        # Option 1: Delete individual session
+        st.markdown("### 🗑️ Usuń pojedynczą sesję")
+        
+        # Session selector for deletion
+        session_options = {f"{s['session_name']} (ID: {s['id']})": s['id'] for s in sessions}
+        
+        selected_session_name = st.selectbox(
+            "Wybierz sesję do usunięcia:",
+            options=list(session_options.keys()),
+            help="Wybierz sesję którą chcesz usunąć wraz z wszystkimi związanymi danymi"
+        )
+        
+        if selected_session_name:
+            selected_session_id = session_options[selected_session_name]
+            selected_session = next(s for s in sessions if s['id'] == selected_session_id)
+            
+            # Show session details before deletion
+            st.info(f"""
+            **Sesja do usunięcia:**
+            - **Nazwa:** {selected_session['session_name']}
+            - **Plik:** {selected_session['filename']}
+            - **Rekordów:** {selected_session['total_records']}
+            - **Status:** {selected_session['status']}
+            """)
+            
+            # Confirmation checkbox
+            confirm_single = st.checkbox(
+                f"Potwierdzam usunięcie sesji '{selected_session['session_name']}'",
+                key="confirm_single_deletion"
+            )
+            
+            if st.button("🗑️ Usuń wybraną sesję", disabled=not confirm_single, type="primary"):
+                with st.spinner("Usuwanie sesji..."):
+                    try:
+                        success, message = delete_session(selected_session_id)
+                        if success:
+                            st.success(f"✅ {message}")
+                            st.rerun()  # Refresh the page to update the list
+                        else:
+                            st.error(f"❌ {message}")
+                    except Exception as e:
+                        st.error(f"❌ Błąd podczas usuwania sesji: {str(e)}")
+        
+        st.markdown("---")
+        
+        # Option 2: Delete all sessions
+        st.markdown("### 🚨 Usuń wszystkie sesje")
+        st.error("🚨 **UWAGA KRYTYCZNA:** Ta operacja usunie WSZYSTKIE sesje i związane z nimi dane!")
+        
+        # Double confirmation for delete all
+        confirm_all_1 = st.checkbox("Rozumiem że to usunie WSZYSTKIE sesje", key="confirm_all_1")
+        confirm_all_2 = st.checkbox("Jestem pewien że chcę usunąć wszystkie dane", key="confirm_all_2") 
+        
+        if confirm_all_1 and confirm_all_2:
+            # Show what will be deleted
+            total_sessions = len(sessions)
+            total_records = sum(s['total_records'] for s in sessions if s['total_records'])
+            
+            st.warning(f"""
+            **Zostanie usunięte:**
+            - **Sesji:** {total_sessions}
+            - **Rekordów:** {total_records}
+            - **Wszystkie dopasowania i sugestie**
+            - **Wszystkie mapowania nazw**
+            """)
+            
+            if st.button("🚨 USUŃ WSZYSTKIE SESJE", type="secondary"):
+                with st.spinner("Usuwanie wszystkich sesji..."):
+                    try:
+                        success, message = delete_all_sessions()
+                        if success:
+                            st.success(f"✅ {message}")
+                            st.rerun()  # Refresh the page
+                        else:
+                            st.error(f"❌ {message}")
+                    except Exception as e:
+                        st.error(f"❌ Błąd podczas usuwania wszystkich sesji: {str(e)}")
+
 if __name__ == "__main__":
     main()

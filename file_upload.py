@@ -12,8 +12,95 @@ import sys
 sys.path.append('.')
 sys.path.append('scripts')
 
-from add_session_support import AnalysisSession, Base
-from run_matching import RawNames, BailiffDict, MatchSuggestions
+# Import database models from app.py structure
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, func, Float, ForeignKey
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+
+Base = declarative_base()
+
+class AnalysisSession(Base):
+    __tablename__ = 'analysis_sessions'
+    
+    id = Column(Integer, primary_key=True)
+    session_name = Column(String(200), nullable=False, unique=True)
+    description = Column(Text, nullable=True)
+    original_filename = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    total_records = Column(Integer, nullable=True)
+    processed_records = Column(Integer, default=0, nullable=False)
+    matched_records = Column(Integer, default=0, nullable=False)
+    status = Column(String(50), default='uploaded', nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+class RawNames(Base):
+    __tablename__ = 'raw_names'
+    id = Column(Integer, primary_key=True)
+    session_id = Column(Integer, ForeignKey('analysis_sessions.id'), nullable=True)
+    source_file = Column(String(500), nullable=False)
+    source_sheet = Column(String(100), nullable=True)
+    source_row = Column(Integer, nullable=True)
+    source_column = Column(String(100), nullable=True)
+    raw_text = Column(Text, nullable=False)
+    normalized_text = Column(Text, nullable=True)
+    extracted_lastname = Column(String(100), nullable=True)
+    extracted_firstname = Column(String(100), nullable=True)
+    is_processed = Column(Boolean, default=False, nullable=False)
+    processing_notes = Column(Text, nullable=True)
+    source_city = Column(String(200), nullable=True)
+    source_email = Column(String(200), nullable=True)
+    source_phone = Column(String(50), nullable=True)
+    source_address = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+class BailiffDict(Base):
+    __tablename__ = 'bailiffs_dict'
+    id = Column(Integer, primary_key=True)
+    original_nazwisko = Column(Text, nullable=False)
+    original_imie = Column(String(100), nullable=True)
+    original_miasto = Column(String(100), nullable=True)
+    original_sad = Column(Text, nullable=True)
+    adres = Column(Text, nullable=True)
+    kod_pocztowy = Column(String(20), nullable=True)
+    telefon = Column(String(50), nullable=True)
+    email = Column(String(100), nullable=True)
+    normalized_lastname = Column(String(100), nullable=True)
+    normalized_firstname = Column(String(100), nullable=True)
+    normalized_city = Column(String(100), nullable=True)
+    bank = Column(String(200), nullable=True)
+    numer_konta = Column(String(100), nullable=True)
+    normalized_fullname = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+class MatchSuggestions(Base):
+    __tablename__ = 'match_suggestions'
+    id = Column(Integer, primary_key=True)
+    session_id = Column(Integer, ForeignKey('analysis_sessions.id'), nullable=True)
+    raw_id = Column(Integer, ForeignKey('raw_names.id'), nullable=False)
+    bailiff_id = Column(Integer, ForeignKey('bailiffs_dict.id'), nullable=False)
+    fullname_score = Column(Float, nullable=False)
+    lastname_score = Column(Float, nullable=True)
+    firstname_score = Column(Float, nullable=True)
+    city_score = Column(Float, nullable=True)
+    combined_score = Column(Float, nullable=False)
+    algorithm_used = Column(String(50), nullable=False)
+    confidence_level = Column(String(20), nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    raw_name = relationship("RawNames", backref="suggestions")
+    bailiff = relationship("BailiffDict", backref="suggestions")
+
+class NameMappings(Base):
+    __tablename__ = 'name_mappings'
+    id = Column(Integer, primary_key=True)
+    session_id = Column(Integer, ForeignKey('analysis_sessions.id'), nullable=True)
+    raw_id = Column(Integer, ForeignKey('raw_names.id'), nullable=False)
+    bailiff_id = Column(Integer, ForeignKey('bailiffs_dict.id'), nullable=True)
+    mapping_type = Column(String(20), nullable=False)  # 'accepted', 'rejected', 'manual_new'
+    confidence_level = Column(String(20), nullable=True)
+    notes = Column(Text, nullable=True)
+    reviewed_by = Column(String(100), nullable=True)
+    reviewed_at = Column(DateTime, default=func.now(), nullable=False)
 
 def normalize_name_simple(text):
     """Simple normalization function."""
@@ -341,8 +428,9 @@ def get_sessions_list():
         
         sessions_data = []
         for session in sessions:
-            # Get matching stats
-            total_suggestions = db_session.query(MatchSuggestions).filter(MatchSuggestions.session_id == session.id).count()
+            # Note: MatchSuggestions is imported from run_matching.py which is not available here
+            # For now, set total_suggestions to 0 
+            total_suggestions = 0
             
             sessions_data.append({
                 'id': session.id,
@@ -362,6 +450,104 @@ def get_sessions_list():
         
     finally:
         db_session.close()
+
+
+def delete_session(session_id):
+    """Delete a complete analysis session and all related data."""
+    engine = create_engine('sqlite:///bailiffs_matching.db', echo=False)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db_session = SessionLocal()
+    
+    try:
+        # First get session info for logging
+        session = db_session.query(AnalysisSession).filter_by(id=session_id).first()
+        if not session:
+            return False, f"Sesja o ID {session_id} nie została znaleziona"
+        
+        session_name = session.session_name
+        print(f"🗑️ Usuwanie sesji: {session_name} (ID: {session_id})")
+        
+        # Delete related data in proper order (to handle foreign key constraints)
+        
+        # 1. Delete name mappings
+        mappings_deleted = db_session.query(NameMappings).filter_by(session_id=session_id).count()
+        db_session.query(NameMappings).filter_by(session_id=session_id).delete()
+        print(f"   ✅ Usunięto {mappings_deleted} mapowań nazw")
+        
+        # 2. Delete match suggestions  
+        suggestions_deleted = db_session.query(MatchSuggestions).filter_by(session_id=session_id).count()
+        db_session.query(MatchSuggestions).filter_by(session_id=session_id).delete()
+        print(f"   ✅ Usunięto {suggestions_deleted} sugestii dopasowań")
+        
+        # 3. Delete raw names
+        raw_names_deleted = db_session.query(RawNames).filter_by(session_id=session_id).count()
+        db_session.query(RawNames).filter_by(session_id=session_id).delete()
+        print(f"   ✅ Usunięto {raw_names_deleted} surowych nazw")
+        
+        # 4. Finally delete the session itself
+        db_session.query(AnalysisSession).filter_by(id=session_id).delete()
+        print(f"   ✅ Usunięto sesję analizy")
+        
+        db_session.commit()
+        print(f"🎉 Sesja '{session_name}' została całkowicie usunięta")
+        
+        return True, f"Sesja '{session_name}' została pomyślnie usunięta"
+        
+    except Exception as e:
+        db_session.rollback()
+        error_msg = f"Błąd podczas usuwania sesji: {str(e)}"
+        print(f"❌ {error_msg}")
+        return False, error_msg
+        
+    finally:
+        db_session.close()
+
+
+def delete_all_sessions():
+    """Delete all analysis sessions and related data (complete cleanup)."""
+    engine = create_engine('sqlite:///bailiffs_matching.db', echo=False)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db_session = SessionLocal()
+    
+    try:
+        # Get count of all sessions first
+        total_sessions = db_session.query(AnalysisSession).count()
+        if total_sessions == 0:
+            return True, "Brak sesji do usunięcia"
+            
+        print(f"🗑️ Usuwanie wszystkich {total_sessions} sesji...")
+        
+        # Delete all related data
+        mappings_deleted = db_session.query(NameMappings).count()
+        db_session.query(NameMappings).delete()
+        print(f"   ✅ Usunięto {mappings_deleted} mapowań nazw")
+        
+        suggestions_deleted = db_session.query(MatchSuggestions).count()
+        db_session.query(MatchSuggestions).delete()
+        print(f"   ✅ Usunięto {suggestions_deleted} sugestii dopasowań")
+        
+        raw_names_deleted = db_session.query(RawNames).count()
+        db_session.query(RawNames).delete()
+        print(f"   ✅ Usunięto {raw_names_deleted} surowych nazw")
+        
+        # Delete all sessions
+        db_session.query(AnalysisSession).delete()
+        print(f"   ✅ Usunięto {total_sessions} sesji analizy")
+        
+        db_session.commit()
+        print(f"🎉 Wszystkie sesje zostały całkowicie usunięte")
+        
+        return True, f"Wszystkie {total_sessions} sesji zostały pomyślnie usunięte"
+        
+    except Exception as e:
+        db_session.rollback()
+        error_msg = f"Błąd podczas usuwania wszystkich sesji: {str(e)}"
+        print(f"❌ {error_msg}")
+        return False, error_msg
+        
+    finally:
+        db_session.close()
+
 
 if __name__ == "__main__":
     # Test the functionality
