@@ -1,0 +1,142 @@
+[
+  {
+    "original": {
+      "imie": "Piotr",
+      "nazwisko": "Celiński",
+      "miasto": "Sejny",
+      "apelacja": "Białystok"
+    },
+    "normalized": {
+      "normalized_lastname": "celinski",
+      "normalized_firstname": "piotr",
+      "normalized_city": "sejny",
+      "normalized_fullname": "piotr celinski"
+    }
+  },
+  {
+    "original": {
+      "imie": "Paulina",
+      "nazwisko": "Chełmińska",
+      "miasto": "Augustów",
+      "apelacja": "Białystok"
+    },
+    "normalized": {
+      "normalized_lastname": "chelminska",
+      "normalized_firstname": "paulina",
+      "normalized_city": "augustow",
+      "normalized_fullname": "paulina chelminska"
+    }
+  },
+  {
+    "original": {
+      "imie": "Sylwia",
+      "nazwisko": "Sobolewska",
+      "miasto": "Augustów",
+      "apelacja": "Białystok"
+    },
+    "normalized": {
+      "normalized_lastname": "sad okregowybolewska",
+      "normalized_firstname": "sylwia",
+      "normalized_city": "augustow",
+      "normalized_fullname": "sylwia sad okregowybolewska"
+    }
+  },
+  {
+    "original": {
+      "imie": "Mariusz",
+      "nazwisko": "Goławski",
+      "miasto": "Bartoszyce",
+      "apelacja": "Białystok"
+    },
+    "normalized": {
+      "normalized_lastname": "golawski",
+      "normalized_firstname": "mariusz",
+      "normalized_city": "bartoszyce",
+      "normalized_fullname": "mariusz golawski"
+    }
+  },
+  {
+    "original": {
+      "imie": "Łukasz",
+      "nazwisko": "Sęk",
+      "miasto": "Bartoszyce",
+      "apelacja": "Białystok"
+    },
+    "normalized": {
+      "normalized_lastname": "sek",
+      "normalized_firstname": "lukasz",
+      "normalized_city": "bartoszyce",
+      "normalized_fullname": "lukasz sek"
+    }
+  },
+  {
+    "original": {
+      "imie": "Tomasz",
+      "nazwisko": "Książak",
+      "miasto": "Białystok",
+      "apelacja": "Białystok"
+    },
+    "normalized": {
+      "normalized_lastname": "ksiazak",
+      "normalized_firstname": "tomasz",
+      "normalized_city": "bialystok",
+      "normalized_fullname": "tomasz ksiazak"
+    }
+  },
+  {
+    "original": {
+      "imie": "Maciej",
+      "nazwisko": "Saniukowicz",
+      "miasto": "Białystok",
+      "apelacja": "Białystok"
+    },
+    "normalized": {
+      "normalized_lastname": "sad apelacyjnyniukowicz",
+      "normalized_firstname": "maciej",
+      "normalized_city": "bialystok",
+      "normalized_fullname": "maciej sad apelacyjnyniukowicz"
+    }
+  },
+  {
+    "original": {
+      "imie": "Danuta Ewa",
+      "nazwisko": "Konieczka",
+      "miasto": "Białystok",
+      "apelacja": "Białystok"
+    },
+    "normalized": {
+      "normalized_lastname": "konieczka",
+      "normalized_firstname": "danuta ewa",
+      "normalized_city": "bialystok",
+      "normalized_fullname": "danuta ewa konieczka"
+    }
+  },
+  {
+    "original": {
+      "imie": "Agnieszka",
+      "nazwisko": "Kosacka-Bobier",
+      "miasto": "Białystok",
+      "apelacja": "Białystok"
+    },
+    "normalized": {
+      "normalized_lastname": "kosad apelacyjnycka-bobier",
+      "normalized_firstname": "agnieszka",
+      "normalized_city": "bialystok",
+      "normalized_fullname": "agnieszka kosad apelacyjnycka-bobier"
+    }
+  },
+  {
+    "original": {
+      "imie": "Emilia",
+      "nazwisko": "Jaroszewicz-Movsesyan",
+      "miasto": "Białystok",
+      "apelacja": "Białystok"
+    },
+    "normalized": {
+      "normalized_lastname": "jaroszewicz-movsesyan",
+      "normalized_firstname": "emilia",
+      "normalized_city": "bialystok",
+      "normalized_fullname": "emilia jaroszewicz-movsesyan"
+    }
+  }
+]
